@@ -23,8 +23,7 @@ public class TenantConfigService {
     public TenantConfig getConfig(String tenantId) {
         log.info("Cache miss for tenant: {} - fetching from db", tenantId);
 
-        TenantPlan tenantPlan = tenantPlanRepository
-                .findByTenantIdWithPlan(tenantId)
+        TenantPlan tenantPlan = tenantPlanRepository.findByTenantIdWithPlan(tenantId)
                 .orElseThrow(() -> new RuntimeException(
                         "Tenant not found: " + tenantId
                 ));
@@ -42,14 +41,12 @@ public class TenantConfigService {
     public void updateTenantPlan(String tenantId, String newPlanName) {
         log.info("Updating plan for tenant: {} to {}", tenantId, newPlanName);
 
-        TenantPlan tenantPlan = tenantPlanRepository
-                .findByTenantIdWithPlan(tenantId)
+        TenantPlan tenantPlan = tenantPlanRepository.findByTenantIdWithPlan(tenantId)
                 .orElseThrow(() -> new RuntimeException(
                         "Tenant not found: " + tenantId
                 ));
 
-        Plan newPlan = planRepository
-                .findById(newPlanName)
+        Plan newPlan = planRepository.findById(newPlanName)
                 .orElseThrow(() -> new RuntimeException(
                         "Plan not found: " + newPlanName
                 ));
