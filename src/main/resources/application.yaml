@@ -23,8 +23,6 @@ spring:
 
   cache:
     type: caffeine
-    caffeine:
-      spec: maximumSize=1000,expireAfterWrite=30s
 
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
