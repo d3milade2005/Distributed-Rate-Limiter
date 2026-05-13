@@ -1,5 +1,6 @@
 package com.backend.Distributed_Rate_Limiter.dto;
 
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -16,6 +17,6 @@ public class RateLimitRequest {
     @NotBlank(message = "action is required")
     private String action;
 
-    @NotBlank(message = "cost must be at least 1")
+    @Min(value=1, message="cost must be at least 1")
     private int cost;
 }
