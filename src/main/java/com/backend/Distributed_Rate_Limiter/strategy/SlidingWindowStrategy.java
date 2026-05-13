@@ -34,8 +34,13 @@ public class SlidingWindowStrategy implements RateLimitStrategy {
                 String.valueOf(config.getWindowMs()),
                 String.valueOf(config.getCapacity()),
                 String.valueOf(now),
-                requestId
+                requestId,
+                String.valueOf(request.getCost())
         );
+
+        if (result == null || result.size() < 3) {
+            throw new IllegalStateException("Sliding window script returned an invalid response");
+        }
 
         boolean allowed = result.get(0) == 1L;
         int remaining = result.get(1).intValue();
@@ -46,7 +51,8 @@ public class SlidingWindowStrategy implements RateLimitStrategy {
     }
 
     private String buildKey(RateLimitRequest request) {
-        return request.getTenantId() + ":" +
+        return "sliding_window:" +
+                request.getTenantId() + ":" +
                 request.getUserId()   + ":" +
                 request.getAction();
     }

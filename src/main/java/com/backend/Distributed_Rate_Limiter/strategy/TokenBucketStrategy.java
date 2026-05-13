@@ -11,7 +11,6 @@ import org.springframework.stereotype.Component;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.UUID;
 
 @Component("token_bucket")
 @RequiredArgsConstructor
@@ -25,16 +24,19 @@ public class TokenBucketStrategy implements RateLimitStrategy {
 
         String key = buildKey(request);
         long now = System.currentTimeMillis();
-        String requestId = UUID.randomUUID().toString(); // use unique id for each request so two requests at the same ms don't collide in the sorted set
 
         List<Long> result = redisTemplate.execute(
                 tokenBucketScript,
                 Collections.singletonList(key),
-                String.valueOf(config.getWindowMs()),
                 String.valueOf(config.getCapacity()),
+                String.valueOf(config.getRefillRate()),
                 String.valueOf(now),
-                requestId
+                String.valueOf(request.getCost())
         );
+
+        if (result == null || result.size() < 3) {
+            throw new IllegalStateException("Token bucket script returned an invalid response");
+        }
 
         boolean allowed = result.get(0) == 1L;
         int remaining = result.get(1).intValue();
@@ -45,7 +47,8 @@ public class TokenBucketStrategy implements RateLimitStrategy {
     }
 
     private String buildKey(RateLimitRequest request) {
-        return request.getTenantId() + ":" +
+        return "token_bucket:" +
+                request.getTenantId() + ":" +
                 request.getUserId()   + ":" +
                 request.getAction();
     }
