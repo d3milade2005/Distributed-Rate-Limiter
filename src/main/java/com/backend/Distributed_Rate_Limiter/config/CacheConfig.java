@@ -18,6 +18,7 @@ public class CacheConfig {
                 Caffeine.newBuilder()
                         .maximumSize(1000)
                         .expireAfterWrite(30, TimeUnit.SECONDS)
+                        .recordStats()
         );
         return cacheManager;
     }

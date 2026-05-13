@@ -11,7 +11,7 @@ CREATE TABLE tenant_plans (
     fail_behavior  VARCHAR(20) NOT NULL DEFAULT 'fail_open'
 );
 
-CREATE TABLE audit_log (
+CREATE TABLE audit_logs (
     id          BIGSERIAL PRIMARY KEY,
     tenant_id   VARCHAR(100) NOT NULL,
     user_id     VARCHAR(100) NOT NULL,

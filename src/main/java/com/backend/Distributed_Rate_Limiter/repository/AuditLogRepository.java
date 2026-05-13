@@ -7,7 +7,7 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface AuditLogRepository extends JpaRepository<AuditLog, Integer> {
+public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
     List<AuditLog> findByTenantIdOrderByCreatedAtDesc(String tenantId);
     List<AuditLog> findByTenantIdAndUserIdOrderByCreatedAtDesc(String tenantId, String userId);
 }
