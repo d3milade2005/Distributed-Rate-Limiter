@@ -33,4 +33,12 @@ public class RedisConfig {
         redisScript.setResultType((Class<List<Long>>) (Class<?>) List.class);
         return redisScript;
     }
+
+    @Bean
+    public  DefaultRedisScript<List<Long>> tokenBucketScript() {
+        DefaultRedisScript<List<Long>> redisScript = new DefaultRedisScript<>();
+        redisScript.setScriptSource(new ResourceScriptSource(new ClassPathResource("scripts/token_bucket.lua")));
+        redisScript.setResultType((Class<List<Long>>) (Class<?>) List.class);
+        return redisScript;
+    }
 }

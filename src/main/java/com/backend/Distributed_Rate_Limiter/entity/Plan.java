@@ -23,4 +23,7 @@ public class Plan {
 
     @Column(name = "window_ms", nullable = false)
     private Long windowMs;
+
+    @Column(name = "algorithm", length = 20, nullable = false)
+    private String algorithm;
 }

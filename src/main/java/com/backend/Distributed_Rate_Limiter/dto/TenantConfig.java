@@ -12,4 +12,5 @@ public class TenantConfig {
     private Double refillRate;
     private Long windowMs;
     private String failBehavior;
+    private String algorithm;
 }

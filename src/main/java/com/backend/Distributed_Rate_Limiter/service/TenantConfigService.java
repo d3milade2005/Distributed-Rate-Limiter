@@ -65,7 +65,8 @@ public class TenantConfigService {
                 tenantPlan.getPlan().getCapacity(),
                 tenantPlan.getPlan().getRefillRate(),
                 tenantPlan.getPlan().getWindowMs(),
-                tenantPlan.getFailBehavior()
+                tenantPlan.getFailBehavior(),
+                tenantPlan.getPlan().getAlgorithm()
         );
     }
 

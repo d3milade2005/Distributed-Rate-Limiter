@@ -5,6 +5,9 @@ import com.backend.Distributed_Rate_Limiter.dto.RateLimitResponse;
 import com.backend.Distributed_Rate_Limiter.dto.TenantConfig;
 import com.backend.Distributed_Rate_Limiter.entity.AuditLog;
 import com.backend.Distributed_Rate_Limiter.repository.AuditLogRepository;
+import com.backend.Distributed_Rate_Limiter.strategy.RateLimitStrategy;
+import com.backend.Distributed_Rate_Limiter.strategy.SlidingWindowStrategy;
+import com.backend.Distributed_Rate_Limiter.strategy.TokenBucketStrategy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -14,23 +17,31 @@ import org.springframework.stereotype.Service;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
 @Slf4j
-@RequiredArgsConstructor
 public class RateLimiterService {
 
     private final TenantConfigService tenantConfigService;
     private final AuditLogRepository auditLogRepository;
-    private final RedisTemplate<String, String> redisTemplate;
-    private final DefaultRedisScript<List<Long>> slidingWindowScript;
+    private final Map<String, RateLimitStrategy> strategies;
+
+    public RateLimiterService(TenantConfigService tenantConfigService, AuditLogRepository auditLogRepository, Map<String, RateLimitStrategy> strategies) {
+        this.tenantConfigService = tenantConfigService;
+        this.auditLogRepository = auditLogRepository;
+        this.strategies = strategies;
+    }
 
 
 //    request comes in
 //      ↓
 //    get tenant config from caffeine
 //      ↓
+//    get the strategy bean based on config.algorithm
+//      ↓
+//    strategy executes:
 //    redis available? → run lua script → return result
 //    redis down? → check fail_behavior → allow or deny
 
@@ -43,37 +54,27 @@ public class RateLimiterService {
             return new RateLimitResponse(false, 0, 0, "Tenant configuration not found");
         }
 
+        RateLimitStrategy strategy = strategies.get(config.getAlgorithm());
+        if (strategy == null) {
+            log.error("Unknown algorithm: {}", config.getAlgorithm());
+            return new RateLimitResponse(false, 0, 0, "Unknown algorithm: " + config.getAlgorithm());
+        }
+
         try {
-            return runSlidingWindow(rateLimitRequest, config);
+            RateLimitResponse response = strategy.check(rateLimitRequest, config);
+
+            saveAuditLog(
+                    rateLimitRequest.getTenantId(),
+                    rateLimitRequest.getUserId(),
+                    rateLimitRequest.getAction(),
+                    response.isAllowed() ? "allowed" : "denied"
+            );
+
+            return response;
         } catch (Exception e) {
             log.error("Redis error for tenant: {}", rateLimitRequest.getTenantId(), e);
             return handleRedisFailure(config);
         }
-    }
-
-    private RateLimitResponse runSlidingWindow(RateLimitRequest request, TenantConfig config) {
-        String key = buildKey(request);
-
-        long now = System.currentTimeMillis();
-
-        String requestId = UUID.randomUUID().toString(); // use unique id for each request so two requests at the same ms don't collide in the sorted set
-        List<Long> result = redisTemplate.execute(
-                slidingWindowScript,
-                Collections.singletonList(key),
-                String.valueOf(config.getWindowMs()),
-                String.valueOf(config.getCapacity()),
-                String.valueOf(now),
-                requestId
-        );
-
-        boolean allowed = result.get(0) == 1L;
-        int remaining = result.get(1).intValue();
-        long resetAt = result.get(2);
-
-        saveAuditLog(request.getTenantId(), request.getUserId(), request.getAction(), allowed ? "ALLOWED" : "REJECTED");
-
-        String reason = allowed ? "ok" : "rate limit exceeded";
-        return new RateLimitResponse(allowed, remaining, resetAt, reason);
     }
 
 
@@ -89,11 +90,6 @@ public class RateLimiterService {
         );
     }
 
-    private String buildKey(RateLimitRequest request) {
-        return request.getTenantId() + ":" +
-                request.getUserId()   + ":" +
-                request.getAction();
-    }
 
     @Async
     protected void saveAuditLog(String tenantId, String userId, String action, String result) {
