@@ -48,7 +48,7 @@ public class TenantConfigService {
         tenantPlan.setFailBehavior(failBehavior);
 
         TenantPlan savedTenantPlan = tenantPlanRepository.save(tenantPlan);
-        return mapToConfig(savedTenantPlan);
+        return mapToConfig(savedTenantPlan, plan);
     }
 
     @CacheEvict(value = "tenant-configs", key = "#tenantId")
@@ -72,7 +72,7 @@ public class TenantConfigService {
         TenantPlan savedTenantPlan = tenantPlanRepository.save(tenantPlan);
 
         log.info("Tenant: {} successfully upgraded to plan: {}", tenantId, newPlanName);
-        return mapToConfig(savedTenantPlan);
+        return mapToConfig(savedTenantPlan, newPlan);
     }
 
     private TenantConfig mapToConfig(TenantPlan tenantPlan) {
@@ -86,11 +86,21 @@ public class TenantConfigService {
         );
     }
 
+    private TenantConfig mapToConfig(TenantPlan tenantPlan, Plan plan) {
+        return new TenantConfig(
+                tenantPlan.getTenantId(),
+                plan.getCapacity(),
+                plan.getRefillRate(),
+                plan.getWindowMs(),
+                tenantPlan.getFailBehavior(),
+                plan.getAlgorithm()
+        );
+    }
+
     private Plan getPlan(String planName) {
         return planRepository.findById(planName)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Plan not found: " + planName
                 ));
     }
-
 }
