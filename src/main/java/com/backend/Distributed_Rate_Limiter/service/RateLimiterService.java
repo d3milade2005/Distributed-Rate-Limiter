@@ -6,12 +6,9 @@ import com.backend.Distributed_Rate_Limiter.dto.TenantConfig;
 import com.backend.Distributed_Rate_Limiter.entity.AuditLog;
 import com.backend.Distributed_Rate_Limiter.repository.AuditLogRepository;
 import com.backend.Distributed_Rate_Limiter.strategy.RateLimitStrategy;
-import com.backend.Distributed_Rate_Limiter.strategy.SlidingWindowStrategy;
-import com.backend.Distributed_Rate_Limiter.strategy.TokenBucketStrategy;
-import lombok.RequiredArgsConstructor;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -27,12 +24,20 @@ public class RateLimiterService {
     private final TenantConfigService tenantConfigService;
     private final AuditLogRepository auditLogRepository;
     private final Map<String, RateLimitStrategy> strategies;
+    private final MeterRegistry meterRegistry;
 
-    public RateLimiterService(TenantConfigService tenantConfigService, AuditLogRepository auditLogRepository, Map<String, RateLimitStrategy> strategies) {
+    public RateLimiterService(TenantConfigService tenantConfigService, AuditLogRepository auditLogRepository, Map<String, RateLimitStrategy> strategies, MeterRegistry meterRegistry) {
         this.tenantConfigService = tenantConfigService;
         this.auditLogRepository = auditLogRepository;
         this.strategies = strategies;
+        this.meterRegistry = meterRegistry;
     }
+
+//    Note strategises looks like this at runtime:
+//    {
+//        "sliding_window" → SlidingWindowStrategy instance,
+//        "token_bucket"   → TokenBucketStrategy instance
+//    }
 
 
 //    request comes in
@@ -51,30 +56,47 @@ public class RateLimiterService {
         try {
             config = tenantConfigService.getConfig(rateLimitRequest.getTenantId());
         } catch (Exception e) {
+            log.error("Tenant not found: {}", rateLimitRequest.getTenantId());
+            recordMetric(rateLimitRequest.getTenantId(), "unknown", "denied", "tenant_not_found");
             return new RateLimitResponse(false, 0, 0, "Tenant configuration not found");
         }
 
         RateLimitStrategy strategy = strategies.get(config.getAlgorithm());
         if (strategy == null) {
             log.error("Unknown algorithm: {}", config.getAlgorithm());
+            recordMetric(rateLimitRequest.getTenantId(), config.getAlgorithm(), "denied", "unknown_algorithm");
             return new RateLimitResponse(false, 0, 0, "Unknown algorithm: " + config.getAlgorithm());
         }
 
         try {
             RateLimitResponse response = strategy.check(rateLimitRequest, config);
 
+            String result = response.isAllowed() ? "allowed" : "denied";
+            recordMetric(rateLimitRequest.getTenantId(), config.getAlgorithm(), result, rateLimitRequest.getAction());
+
             saveAuditLog(
                     rateLimitRequest.getTenantId(),
                     rateLimitRequest.getUserId(),
                     rateLimitRequest.getAction(),
-                    response.isAllowed() ? "allowed" : "denied"
+                    result
             );
 
             return response;
         } catch (Exception e) {
             log.error("Redis error for tenant: {}", rateLimitRequest.getTenantId(), e);
+            recordMetric(rateLimitRequest.getTenantId(), config.getAlgorithm(), "error", rateLimitRequest.getAction());
             return handleRedisFailure(config);
         }
+    }
+
+    private void recordMetric(String tenantId, String algorithm, String result, String action) {
+        Counter.builder("rate_limiter.requests")
+                .tag("tenant", tenantId)
+                .tag("algorithm", algorithm)
+                .tag("result", result)
+                .tag("action", action)
+                .register(meterRegistry)
+                .increment();
     }
 
 
