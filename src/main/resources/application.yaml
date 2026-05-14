@@ -50,3 +50,7 @@ management:
   endpoint:
     health:
       show-details: always
+
+api:
+  keys:
+    ${API_KEYS}
