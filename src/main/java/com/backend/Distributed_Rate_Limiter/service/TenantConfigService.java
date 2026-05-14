@@ -1,6 +1,8 @@
 package com.backend.Distributed_Rate_Limiter.service;
 
 import com.backend.Distributed_Rate_Limiter.dto.TenantConfig;
+import com.backend.Distributed_Rate_Limiter.exception.ConflictException;
+import com.backend.Distributed_Rate_Limiter.exception.ResourceNotFoundException;
 import com.backend.Distributed_Rate_Limiter.entity.Plan;
 import com.backend.Distributed_Rate_Limiter.entity.TenantPlan;
 import com.backend.Distributed_Rate_Limiter.repository.PlanRepository;
@@ -24,11 +26,29 @@ public class TenantConfigService {
         log.info("Cache miss for tenant: {} - fetching from db", tenantId);
 
         TenantPlan tenantPlan = tenantPlanRepository.findByTenantIdWithPlan(tenantId)
-                .orElseThrow(() -> new RuntimeException(
+                .orElseThrow(() -> new ResourceNotFoundException(
                         "Tenant not found: " + tenantId
                 ));
 
         return mapToConfig(tenantPlan);
+    }
+
+    public TenantConfig createTenant(String tenantId, String planName, String failBehavior) {
+        log.info("Creating tenant: {} with plan: {}", tenantId, planName);
+
+        if (tenantPlanRepository.existsById(tenantId)) {
+            throw new ConflictException("Tenant already exists: " + tenantId);
+        }
+
+        Plan plan = getPlan(planName);
+
+        TenantPlan tenantPlan = new TenantPlan();
+        tenantPlan.setTenantId(tenantId);
+        tenantPlan.setPlan(plan);
+        tenantPlan.setFailBehavior(failBehavior);
+
+        TenantPlan savedTenantPlan = tenantPlanRepository.save(tenantPlan);
+        return mapToConfig(savedTenantPlan);
     }
 
     @CacheEvict(value = "tenant-configs", key = "#tenantId")
@@ -36,28 +56,24 @@ public class TenantConfigService {
         log.info("Evicting cache for tenant: {}", tenantId);
     }
 
-
     @CacheEvict(value = "tenant-configs", key = "#tenantId")
-    public void updateTenantPlan(String tenantId, String newPlanName) {
+    public TenantConfig updateTenantPlan(String tenantId, String newPlanName) {
         log.info("Updating plan for tenant: {} to {}", tenantId, newPlanName);
 
         TenantPlan tenantPlan = tenantPlanRepository.findByTenantIdWithPlan(tenantId)
-                .orElseThrow(() -> new RuntimeException(
+                .orElseThrow(() -> new ResourceNotFoundException(
                         "Tenant not found: " + tenantId
                 ));
 
-        Plan newPlan = planRepository.findById(newPlanName)
-                .orElseThrow(() -> new RuntimeException(
-                        "Plan not found: " + newPlanName
-                ));
+        Plan newPlan = getPlan(newPlanName);
 
         tenantPlan.setPlan(newPlan);
 
-        tenantPlanRepository.save(tenantPlan);
+        TenantPlan savedTenantPlan = tenantPlanRepository.save(tenantPlan);
 
         log.info("Tenant: {} successfully upgraded to plan: {}", tenantId, newPlanName);
+        return mapToConfig(savedTenantPlan);
     }
-
 
     private TenantConfig mapToConfig(TenantPlan tenantPlan) {
         return new TenantConfig(
@@ -68,6 +84,13 @@ public class TenantConfigService {
                 tenantPlan.getFailBehavior(),
                 tenantPlan.getPlan().getAlgorithm()
         );
+    }
+
+    private Plan getPlan(String planName) {
+        return planRepository.findById(planName)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Plan not found: " + planName
+                ));
     }
 
 }
