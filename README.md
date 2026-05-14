@@ -1,6 +1,6 @@
 # Distributed Rate Limiter
 
-A production-grade, multi-tenant rate limiting service built as a shared infrastructure primitive — the same pattern used by Stripe, Cloudflare, and AWS API Gateway.
+A production-grade, multi-tenant rate limiting service built as a shared infrastructure primitive the same pattern used by Stripe, Cloudflare, and AWS API Gateway.
 
 Instead of every service implementing its own rate limiting logic, they delegate to this centralized service via a single REST call. The result is globally consistent, atomic rate limiting across any number of service instances.
 
@@ -8,7 +8,7 @@ Instead of every service implementing its own rate limiting logic, they delegate
 
 ## The Problem It Solves
 
-When you run multiple instances of a service, local in-process rate limiters break — each instance has its own counter. A user hitting three instances gets three times the allowed limit.
+When you run multiple instances of a service, local in-process rate limiters break  each instance has its own counter. A user hitting three instances gets three times the allowed limit.
 
 This service solves that by centralizing all counters in Redis. Every instance shares the same state. The count is always globally accurate.
 
@@ -67,16 +67,16 @@ Any Service (Socials, Ads, Pages)
 ## Key Technical Decisions
 
 ### Atomic Lua Scripts on Redis
-Race conditions are the core problem in distributed rate limiting. Two simultaneous requests read the same count, both see "under limit," both proceed — over-counting happens.
+Race conditions are the core problem in distributed rate limiting. Two simultaneous requests read the same count, both see "under limit," both proceed over-counting happens.
 
 The fix: Lua scripts execute entirely on the Redis server in a single atomic operation. No client-side read-modify-write. No race conditions. No distributed locks needed.
 
 ### Two Algorithms via Strategy Pattern
 Each tenant's plan defines which algorithm applies:
 
-**Sliding Window** — accurate, fair. Counts requests in a rolling time window. Best for strict quota enforcement.
+**Sliding Window**:  accurate, fair. Counts requests in a rolling time window. Best for strict quota enforcement.
 
-**Token Bucket** — generous with bursts. Users can spike up to their capacity then recover at the refill rate. Best for APIs where short bursts are legitimate.
+**Token Bucket**: generous with bursts. Users can spike up to their capacity then recover at the refill rate. Best for APIs where short bursts are legitimate.
 
 Adding a third algorithm requires one new class. Zero changes to existing code.
 
